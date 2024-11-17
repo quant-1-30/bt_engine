@@ -17,7 +17,6 @@ from typing import List, Any, Dict, Union
 from enum import Enum
 from copy import copy
 from meta import BaseObject
-from core.event import OrderType, OrderStatus
 
 
 class OrderType(Enum):
@@ -71,14 +70,14 @@ class Order(BaseObject):
     def on_status(self, status):
         self._status = status
 
-    def on_validate(self, price):
+    def calc_volume(self, price):
         """
-            estimate volume threshold based on rate
+            estimate volume threshold based on price and market
         """
         incr =  200 if self.sid.startswith("688") else 100 
         per_value = incr * price
-        incr_size = 0 if per_value > self.amount else incr * (self.amount // price)
-        return incr_size
+        approximate = 0 if per_value > self.amount else incr * (self.amount // price)
+        return approximate
 
 
 class Transaction(object):

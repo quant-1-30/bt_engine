@@ -22,13 +22,15 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 from copy import copy
-import numpy as np
-import pandas as pd
+from deprecated import deprecated
+from warnings import warn
 from toolz import valmap
+from typing import Mapping, Any, List
 from collections import defaultdict, OrderedDict
 from functools import partial
-from position import Position
 from utils.wrapper import _deprecated_getitem_method
+from core.ops.model import Transaction, Position
+from core.event import TradeEvent, Event
 
 
 class MutableView(object):
@@ -76,16 +78,14 @@ class Position(object):
         #         position_returns=pd.Series(dtype='float64')
         # )
         # self.inner_position = inner
+        self.sid = sid
         self.size = size
-        if size:
-            self.price = self.cost_basis = price
-        else:
-            self.price = self.cost_basis = 0.0
-        self.upopened = size
-        self.upclosed = 0
-        # intraday
+        self.cost_basis = price
         self.avaiable = 0
-        self.intraday = False
+
+        # stats
+        self.upopened = 0
+        self.upclosed = 0
     
     def __len__(self):
         return abs(self.size)
@@ -102,11 +102,9 @@ class Position(object):
     def __getattr__(self, item):
         return getattr(self.inner_position, item)
 
-    def on_splits(self, size_ratio=1.0, bonus_ratio=0.0):
+    def on_dividends(self, size_ratio=1.0, bonus_ratio=0.0):
         """
             update the postion by the split ratio and return the fractional share that will be converted into cash (除权）
-            零股转为现金 ,重新计算成本,
-            散股 -- 转为现金
         """
         #ZeroDivisionError异常和RuntimeWarning警告之间的区别 --- numpy.float64类型(RuntimeWarning) 稳健方式基于0判断
         oldsize = self.size
@@ -115,10 +113,7 @@ class Position(object):
         bonus = oldsize * bonus_ratio
         return bonus
     
-    def on_rights(self):
-        pass
-
-    def on_update(self, txn):
+    async def on_update(self, txn: Transaction):
         '''
         Updates the current position and returns the updated size, price and
         units used to open/close a position
@@ -155,13 +150,13 @@ class Position(object):
             Both opened and closed carry the same sign as the "size" argument
             because they refer to a part of the "size" argument
         '''
-        self.datetime = txn.created_dt  # record datetime update (datetime.datetime)
 
-        self.price_orig = self.price
-        oldsize = self.size
-        self.size += txn.size
+        oldsize = self.avaiable.copy()
+        self.avaiable += txn.size
 
-        if not self.size:
+        assert self.avaiable >= 0, "not supported short position"
+
+        if not self.avaiable:
             # Update closed existing position
             opened, closed = 0, txn.size
             self.price = 0.0
@@ -173,41 +168,32 @@ class Position(object):
 
             if txn.size > 0:  # increased position
                 opened, closed = txn.size, 0
-                self.price = self.cost_basis = (self.price * oldsize + txn.size * txn.price) / self.size
+                self.cost_basis = (self.price * oldsize + txn.size * txn.price) / (oldsize + txn.size)
 
-            elif self.size > 0:  # reduced position
+            else:
+                # self.avaiable > 0 reduced position
                 opened, closed = 0, txn.size
-                # self.price = self.price
-                self.cost_basis = self.price - txn.size * (txn.price - self.price) / oldsize
-
-            else:  # self.size < 0 # reversed position form plus to minus
-                raise NotImplementedError("not supported short positon ops")
+                self.cost_basis = (self.price * oldsize - txn.size * txn.price) / (oldsize - txn.size)
 
         else:  # oldsize < 0 - existing short position updated
             raise NotImplementedError("not supported short sale")
 
+        # stats
         self.upopened += opened
         self.upclosed += closed
 
-        self.on_intraday()
-
-    def on_intraday(self):
-        # T+1
+    def on_settlement(self, close: float):
+        # due to T+1 / end of trading day                 
         self.size += self.upopened
         self.size -= self.upclosed
-        if not self.intraday:
-            self.avaiable -= self.upclosed
-        else:
-            self.on_sync()
+        self.avaiable = self.size.copy()
+        self.price = close
+        self.upopened = 0
+        self.upclosed = 0
     
     @property
     def closed(self):
         return self.size == 0
-
-    def on_sync(self, close):
-        # end of trading day
-        self.avaiable = self.size.copy()
-        self.price = close
 
     def __repr__(self):
         template = "Position(sid={sid}," \
@@ -219,27 +205,28 @@ class Position(object):
             price=self.cost_basis,
         )
     
-    def __str__(self):
-        items = list()
-        items.append('--- Position Begin')
-        items.append('- Size: {}'.format(self.size))
-        items.append('- Price: {}'.format(self.price))
-        items.append('- Cost_basis: {}'.format(self.cost_basis))
-        items.append('- Closed: {}'.format(self.upclosed))
-        items.append('- Opened: {}'.format(self.upopened))
-        items.append('--- Position End')
-        return '\n'.join(items)
-
-    def to_dict(self):
+    def serialize(self):
         """
             create a dict representing the state of this position
         """
         return {
             'sid': self.sid,
             'size': self.size,
-            'price': self.price,
+            'price': self.cost_basis,
+            'avaiable': self.avaiable,
             }
-    
+    def __str__(self):
+        items = list()
+        items.append('--- Position Begin')
+        items.append('- Sid: {}'.format(self.sid))
+        items.append('- Size: {}'.format(self.size))
+        items.append('- Price: {}'.format(self.cost_basis))
+        items.append('- Avaiable: {}'.format(self.avaiable))
+        items.append('- Closed: {}'.format(self.upclosed))
+        items.append('- Opened: {}'.format(self.upopened))
+        items.append('--- Position End')
+        return '\n'.join(items)
+   
 
 class PositionTracker(object):
     """
@@ -251,7 +238,7 @@ class PositionTracker(object):
         self._dirty_stats = True
 
     @staticmethod
-    def _calc_ratio(dividend):
+    def _calc_ratio(dividend: Mapping[str, Any]):
         """
             股权登记日 ex_date
             股权除息日（为股权登记日下一个交易日）
@@ -270,33 +257,33 @@ class PositionTracker(object):
             bonus_ratio = 0.0
         return size_ratio, bonus_ratio
 
-    def _on_splits(self, dividends):
+    async def _on_split(self, dividends: Mapping[str, Any]):
         total_bonus = 0
-        for sid, p_obj in self.positions.items():
-            # update last_sync_date
-            try:
-                dividend = dividends.loc[sid, :]
-                ratio = self._calc_ratio(dividend)
-                bonus = p_obj.on_splits(*ratio)
-                total_bonus += bonus
-            except KeyError:
-                pass
+        if dividends:
+            for sid, p_obj in self.positions.items():
+                try:
+                    ratio = self._calc_ratio(dividends[sid])
+                    bonus = p_obj.on_dividends(*ratio)
+                    total_bonus += bonus
+                except KeyError:
+                    pass
         return total_bonus
     
-    def _on_rights(self, rights):
+    @deprecated(reason="right will be deprecated in the future , use position on_update instead")
+    async def _on_right(self, rights: Mapping[str, Any]):
         """
             配股机制如果不缴纳款，自动放弃到期除权相当于亏损,在股权登记日卖出 一般的配股缴款起止日为5个交易日
         """
-        return 0.0
+        warn("best practice is to use position on_update instead", UserWarning)
 
-    def process_event(self, event):
-        if event.typ == "splits":
-            data = self._on_splits(event)
+    async def process_event(self, event: Event):
+        if event.typ == "split":
+            data = await self._on_split(event.data)
         else:
-            data = self._on_rights(event)
+            data = await self._on_right(event.data)
         return data
 
-    def update(self, transactions):
+    async def update(self, transactions: List[Transaction]):
         for txn in transactions:
             sid = txn.sid
             try:
@@ -304,7 +291,7 @@ class PositionTracker(object):
             except KeyError:
                 position = self.positions[sid] = Position(sid)
         
-            position.on_update(txn)
+            await position.on_update(txn)
             print("position ", position)
             if position.closed:
                 dts = txn.created_dt.strftime('%Y-%m-%d')
@@ -312,15 +299,33 @@ class PositionTracker(object):
                 print('end session closed positions', self.record_closed_position)
                 del self.positions[sid]
 
-    def on_sync(self, prices):
+    async def syncronize(self, prices: Mapping[str, float]):
         """
             a. sync last_sale_price of position (close price)
             b. update position return series
             c. update last_sync_date
         including : positions and closed position
         """
+        # update last_sync_date
         for p_obj in self.positions.values():
-            p_obj.on_sync(prices[p_obj.sid])
+            await p_obj.on_settlement(prices[p_obj.sid])
+
+    def _cleanup_expired(self, dt: int):
+        """
+            Clear out any assets that have expired before starting a new sim day.
+
+            Finds all assets for which we have positions and generates
+            close_position events for any assets that have reached their
+            close_date.
+        """
+        def past_close_date(asset):
+            acd = asset.delist
+            return acd is not None and acd == dt
+    
+        # Remove positions in any sids that have reached their auto_close date.
+        for p in self.positions.values():
+            if p.size == 0 or past_close_date(p.sid):
+                self.positions.pop(p.sid)           
 
     def get_positions(self):
         # return protocol mappings

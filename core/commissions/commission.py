@@ -7,7 +7,7 @@ Created on Tue Mar 12 15:37:47 2019
 """
 from dataclasses import dataclass
 import pandas as pd
-from model import Order
+from core.event import Order
 
 
 @dataclass
@@ -21,14 +21,13 @@ class Commission:
         raise NotImplementedError()
     
     def calc_rate(self, order):
-        fee_rate = self.patch_benchmark(order=order)
-        return fee_rate
+        fee_ratio = self.patch(order=order)
+        return fee_ratio
     
 
 class NoCommission(Commission):
 
     def patch(self, order):
-
         return 0.0
     
 

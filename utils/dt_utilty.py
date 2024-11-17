@@ -31,9 +31,9 @@ def market_utc(date, tzinfo="Asia/Shanghai"):
 
 def elapsed(dt, fmt="%Y%m%d%H%M"):
     # %-m 不补0
-    struct_dt = datetime.datetime.strptime(dt, fmt)
-    delta = struct_dt - datetime.datetime(year=struct_dt.year, month=struct_dt.month, day=struct_dt.day, hours=9, minutes=30)
-    return delta.seconds, struct_dt
+    fmt = datetime.datetime.strptime(dt, fmt)
+    delta = fmt - datetime.datetime(year=fmt.year, month=fmt.month, day=fmt.day, hours=9, minutes=30)
+    return delta.seconds
 
 def loc2dt(anchor, dt):
     """

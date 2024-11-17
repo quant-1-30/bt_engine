@@ -21,7 +21,7 @@ class Base(DeclarativeBase):
 
 class User(Base):
 
-    __tablename__ = "user_account"
+    __tablename__ = "user_info"
     __table_args__ = {"extend_existing": True}
     # __table_args__ = (PrimaryKeyConstraint("id", "***"),)
 
@@ -36,6 +36,8 @@ class User(Base):
     fullname: Mapped[Optional[str]] = mapped_column(default="")
     phone: Mapped[Optional[int]] = mapped_column(BigInteger, unique=True)
 
+    PrimaryKeyConstraint("user_id", "phone", name="pd_id_phone")
+
     # backref在主类里面申明 / back_populates显式两个类申明
     addresses: Mapped[List["Address"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
@@ -46,25 +48,7 @@ class User(Base):
 
     def __repr__(self) -> str:
         return f"User(id={self.id!r}), name={self.name!r}, fullname={self.fullname!r}"
-
-
-class Experiment(Base):
-
-    # 增加account_id 与 user_id , algo_id映射关系表
-    __tablename__ = "experiment"
-    __table_args__ = {"extend_existing": True}
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    # foreignKey --- unique
-    user_id: Mapped[str] = mapped_column(ForeignKey("user_account.user_id", ondelete="CASCADE", onupdate="CASCADE"), use_existing_column=True)
-    account_id: Mapped[int] = mapped_column(String(64), nullable=False)
-    experiment_id: Mapped[int] = mapped_column(String(20), nullable=False, use_existing_column=True)
-
-    user: Mapped["User"] = relationship(back_populates="experiment")
-    order: Mapped[List["Order"]] = relationship(back_populates="experiment")
-    transaction: Mapped[List["Transaction"]] = relationship(back_populates="experiment")
-    account: Mapped[List["Account"]] = relationship(back_populates="experiment")
-
+    
 
 class Address(Base):
 
@@ -79,7 +63,27 @@ class Address(Base):
 
     def __repr__(self) -> str:
         return f"Address(id={self.id!r}, email_address={self.email_address!r})"
-    
+
+
+class Experiment(Base):
+
+    # 增加account_id 与 user_id , algo_id映射关系表
+    __tablename__ = "experiment"
+    __table_args__ = {"extend_existing": True}
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # foreignKey --- unique
+    user_id: Mapped[str] = mapped_column(ForeignKey("user_account.user_id", ondelete="CASCADE", onupdate="CASCADE"), use_existing_column=True)
+    account_id: Mapped[int] = mapped_column(String(64), nullable=False)
+    experiment_id: Mapped[int] = mapped_column(String(20), nullable=False, use_existing_column=True)
+
+    PrimaryKeyConstraint("user_id", "")
+
+    user: Mapped["User"] = relationship(back_populates="experiment")
+    order: Mapped[List["Order"]] = relationship(back_populates="experiment")
+    transaction: Mapped[List["Transaction"]] = relationship(back_populates="experiment")
+    account: Mapped[List["Account"]] = relationship(back_populates="experiment")
+ 
 
 class Order(Base):
 
@@ -94,10 +98,12 @@ class Order(Base):
     price: Mapped[int] = mapped_column(Integer, nullable=False, use_existing_column=True)
     volume: Mapped[int] = mapped_column(Integer, nullable=False, use_existing_column=True)
 
+    PrimaryKeyConstraint("sid", "order_id", name="pk_sid_order")
+
     experiment: Mapped["Experiment"] = relationship(
         back_populates="order", cascade="all, delete-orphan")
 
-    transaction: Mapped[List["Transaction"]] = relationship(
+    transactions: Mapped[List["Transaction"]] = relationship(
         # uselist False -对一
         back_populates="order", cascade="all, delete-orphan"
     )
@@ -109,16 +115,18 @@ class Transaction(Base):
     __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    sid: Mapped[str] = mapped_column(String(10), primary_key=True, nullable=False, use_existing_column=True)
+    sid: Mapped[str] = mapped_column(String(10), nullable=False, use_existing_column=True)
     created_at: Mapped[int] = mapped_column(Integer, primary_key=True,nullable=False, use_existing_column=True)
     price: Mapped[int] = mapped_column(Integer, nullable=False, use_existing_column=True)
     volume: Mapped[int] = mapped_column(BigInteger, nullable=False, use_existing_column=True)
     cost: Mapped[int] = mapped_column(Integer, nullable=False, use_existing_column=True)
 
+    PrimaryKeyConstraint("id", "sid", name="pk_id_sid")
+
     experiment: Mapped["Experiment"] = relationship(
         back_populates="transaction", cascade="all, delete-orphan")
     order: Mapped["Order"] = relationship(
-        back_populates="transaction", cascade="all, delete-orphan")
+        back_populates="transactions", cascade="all, delete-orphan")
 
 
 class Account(Base):

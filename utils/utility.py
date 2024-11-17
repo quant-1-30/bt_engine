@@ -95,7 +95,7 @@ def display():
         pd.options.display.max_columns = 20
         pandas精度浮点数显示4位
         pd.options.display.precision = 4
-        numpy精度浮点数显示4位，不使用科学计数法
+        numpy精度浮点数显示4位,不使用科学计数法
         np.set_printoptions(precision=4, suppress=True)
     """
 

@@ -7,6 +7,7 @@ Created on Tue Mar 12 15:37:47 2019
 """
 from datetime import datetime
 from meta import BaseObject
+from utils.wrapper import lazy_property
 
 
 class Asset(BaseObject):
@@ -34,7 +35,7 @@ class Asset(BaseObject):
         self.delist = delist
         self.claim_restricted = False
 
-    @property
+    @lazy_property
     def tick_size(self):
         """
             科创板 --- 申报最小200股, 递增可以以1股为单位 | 卖出不足200股一次性卖出
@@ -43,7 +44,7 @@ class Asset(BaseObject):
         tick_size = 200 if self.sid.startswith("688") else 100
         return tick_size
 
-    @property
+    @lazy_property
     def incr(self):
         """
             multiplier / scatter 
@@ -51,7 +52,8 @@ class Asset(BaseObject):
         incr = 200 if self.sid.startswith("688") else 100
         return incr 
     
-    def on_special(self, dt):
+    @property
+    def is_st(self, dt):
         """
             st period 由于缺少st数据默认为False
         """
@@ -69,7 +71,7 @@ class Asset(BaseObject):
             limit = 0.1
     
         # special treatment
-        if self.on_special(dt):
+        if self.is_st(dt):
                 limit = 0.2 if datetime.datetime.strptime(str(dt), "%Y%m%d") >= datetime.date(2020, 8, 24) else 0.05
 
         return limit

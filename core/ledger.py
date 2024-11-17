@@ -6,14 +6,13 @@ Created on Tue Mar 12 15:37:47 2019
 
 @author: python
 """
-import numpy as np
 import pandas as pd
-from enum import Enum
-from copy import copy
 from toolz import valmap, keymap, merge_with
-from position import PositionTracker
+from typing import List
+from trade.position import PositionTracker
 from brokers.broker import BtBroker
-from core.event import TradeReq, AssetEvent, PortfolioEvent
+from core.event import ReqEvent, Event, PortfolioEvent, TradeEvent, SyncEvent
+from core.const import DEFAULT_CAPITAL_BASE
 
 
 class Account(object):
@@ -49,8 +48,7 @@ class Portfolio(object):
         Dict-like object containing information about currently-held positions.
 
     """
-    __slots__ = ['start_cash', 'returns', 'utility', 'positions', '_portfolio_cash', 'pnl',
-                 'loan', 'portfolio_value', 'positions_values', 'portfolio_daily_value']
+    __slots__ = ['initial_balance', 'pnl', 'portfolio_daily_value']
 
     def __init__(self, balance):
         self.initial_balance = balance
@@ -81,9 +79,6 @@ class Portfolio(object):
             weights = pd.Series(dtype='float')
         return weights.to_dict()
 
-    def to_dict(self):
-        return self.__dict__
-
     # If you are adding new attributes, don't update this set. This method
     # is deprecated to normal attribute access so we don't want to encourage
     # new usages.
@@ -99,11 +94,11 @@ class Portfolio(object):
     #     },
     # )
     
-    def __repr__(self):
-        return "Portfolio(Balance={portfolio_value}," \
-               "positions_values={positions_values}".\
-            format(portfolio_value=self.portfolio_value,
-                   positions_values=self.positions_values)
+    # def __repr__(self):
+    #     return "Portfolio(Balance={portfolio_value}," \
+    #            "positions_values={positions_values}".\
+    #         format(portfolio_value=self.portfolio_value,
+    #                positions_values=self.positions_values)
 
 
 class Ledger(object):
@@ -114,9 +109,7 @@ class Ledger(object):
     def __init__(self, kwargs={}):        
         self.position_tracker = PositionTracker()
         self._broker = BtBroker(kwargs)
-        self.avaiable = 0
-
-    def set_fund(self, balance):
+        balance = kwargs.get("initial_balance", DEFAULT_CAPITAL_BASE)
         self.portfolio = Portfolio(balance)
         self.avaiable = balance
     
@@ -145,7 +138,7 @@ class Ledger(object):
 
             owner._addnotification(order, quicknotify=self.p.quicknotify)
 
-    def on_trade(self, event: TradeReq):
+    async def on_trade(self, event: TradeEvent):
         """
             Order event push.
         """
@@ -156,18 +149,19 @@ class Ledger(object):
         #    enter_context  输入一个新的上下文管理器, 并将其__exit__()方法添加到回调堆栈中。返回值是上下文管理器自己的__enter__()方法的结果。
         #    callback(回调, * args, ** kwds)接受任意的回调函数和参数, 并将其添加到回调堆栈中。
         #    """
-        txn = self.broker.on_trade(event)
+        txn = await self.broker.on_trade(event)
         self.position_tracker.update(txn)
         self.avaiable += txn.price * txn.size
+        return txn
     
-    def on_event(self, event: AssetEvent):
+    asyncdef on_event(self, event: Event):
         """
             dividends and rights
         """
-        data = self.position_tracker.process_event(event)
+        data =  await self.position_tracker.process_event(event)
         self.avaiable += data
     
-    def synchronize(self, closes):
+    def on_sync(self, event: SyncEvent):
         """
             sync close price on positions
             Clear out any assets that have expired and positions which volume is zero before starting a new sim day.
@@ -175,14 +169,9 @@ class Ledger(object):
             close_position events for any assets that have reached their
             close_date.
         """
-        self.position_tracker.on_sync(closes)
-
-    def run_metrics(self, session_ix):
-        """
-            calc portfolio
-        """
+        self.position_tracker.syncronize(event.data)
         positions = self.position_tracker.get_positions()
-        portfolio_value, pnl, usage = self.portfolio.calc_portfolio(session_ix, positions)
+        portfolio_value, pnl, usage = self.portfolio.calc_portfolio(event.session_ix, positions)
         portfolio_weight = self.portfolio.current_portfolio_weights(positions)
         portfolio_metrics = PortfolioEvent(avaiable=self.avaiable, 
                                            pnl=pnl, 

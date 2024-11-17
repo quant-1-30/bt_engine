@@ -1,65 +1,63 @@
-# !/usr/bin/env python3
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
+#-*- coding: utf-8 -*-
+
+from dataclasses import dataclass
+from functools import total_ordering
 from typing import List, Any, Dict, Union, Mapping
 from datetime import datetime
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
+from core.ops.model import Order, Transaction, Experiment
 
 
-class ReqEvent(BaseModel):
+class Event(BaseModel):
 
-    token: str
-    sid: str
     typ: str
-    amount: float = 0.0
-    size: int = 0
-
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.strftime('%Y-%m-%d %H:%M:%S')
-        }
+    data: Any
 
     @field_validator("typ")
     def restricted(cls):
-        assert cls.typ in ("market", "price")
+        assert cls.typ in ("split", "dividend")
 
-    @field_validator("sid")
-    def restricted(cls):
-        """
-            6/0/3/688
-            15/55
-        """
-        return True
-    
 
-class RespEvent(BaseModel):
+class TradeEvent(BaseModel):
+
+    order: Order
+    data: dict
+
+
+class SyncEvent(BaseModel):
+
+    session_ix: int
+    data: Mapping[str, float]
+
+    # class Config:
+    #     date_encoders = {
+    #         datetime: lambda v: v.strftime('%Y-%m-%d %H:%M:%S')
+    #     }
+
+
+class QueryEvent(BaseModel):
      
-     status: int
-     id: str
+     start: int
+     end: int
+     experiment_id: str
 
 
 class LoginEvent(BaseModel):
      
      user_id: str
-     phone: str
      accout_id: str
+     token: str
 
-     @field_validator("phone")
+     @field_validator("user_id")
      def validate(cls):
-          """
-            re match phone 11 / 86 开头
-          """
           return True
-
-
-class AssetEvent(BaseModel):
-
-    sid: str
-    typ: str
-    body: Any
-
-    @field_validator("typ")
-    def restricted(cls):
-        assert cls.typ in ("splits", "dividends")
+    
+    
+class RespEvent(BaseModel):
+     
+     status: int
+     error: str
 
 
 class PortfolioEvent(BaseModel):
@@ -69,4 +67,3 @@ class PortfolioEvent(BaseModel):
         usage: float
         portfolio_value: float
         portfolio_weight: Mapping[str, float]
-

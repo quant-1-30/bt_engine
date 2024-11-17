@@ -5,10 +5,12 @@ from textwrap import dedent
 from typing import Any, List
 import numpy as np
 from numpy.random import default_rng # type: ignore
-from core.obj import Transaction, Commission, Order
+from core.event import Transaction, Commission, Order
 from utils.dt_utilty import elapsed, str2dt, loc2dt
 # from six import with_metaclass
 from meta import ParamBase
+from core.event import TradeEvent
+from core.ops.model import Order, Transaction
 
 
 class BtBroker(ParamBase):
@@ -31,7 +33,7 @@ class BtBroker(ParamBase):
         self.delay = kwargs.pop("delay", self.p.delay)
         self.impact_factor = kwargs.pop("impact_factor", self.p.impact_factor) 
         self.slippage_factor = kwargs.pop("slippage_factor", self.p.slippage_factor) 
-        self.downsample = kwargs.pop("analog", "Beta") 
+        self.simulate = kwargs.pop("analog", "BetaPatch") 
         self.restricted = kwargs.pop("epsilon", self.p.restricted) 
         self.commission = Commission(self.p.base_cost, self.p.multiply)
 
@@ -46,67 +48,69 @@ class BtBroker(ParamBase):
         status = True if pct <= self.p.epsilon else False
         return status 
 
-    def analog(self, lines):
+    async def yield_simulation(self, minutes):
         """
-            downsample 3/s tick price with 1/m price
+            patch minutes to 3 second tick
         """
-        vols = [item["volume"] for item in lines]
-        tick_prices = [self.downsample.sample(tick)  for tick in lines]
-        tick_vols = [self.downsample.sample(vol)  for vol in vols]
+        ticks = [self.tick_patch.patch(snapshot) for snapshot in minutes]
+        tick_prices = [item[0] for item in ticks]
+        tick_vols = [item[1] for item in ticks]
         price_arrays = np.array(itertools.chain(*tick_prices))
         vol_arrays = np.array(itertools.chain(*tick_vols)) 
         return price_arrays, vol_arrays
     
-    def _on_deal(self, anchor, samples, order):
-        # slippage_price
-        fee = self.commission.calc_rate(order)
-        slippage_price = samples[0][anchor + self.p.delay] * ( 1 + self.slippage_factor) * (1 + fee)
-        slippage_vol = order.on_validate(slippage_price) if order.direction == 1 else order.volume
-        if slippage_vol:
+    async def _exec_deal(self, pos, simulations, order) -> Transaction:
+        ask_price = simulations[0][pos + self.p.delay]
+        fee_ratio = self.commission.calc_rate(order)
+        # slippage_price and slippage_vol
+        slip_price = ask_price * ( 1 + self.slippage_factor) * (1 + fee_ratio)
+        slip_vol = order.on_validate(slip_price) if order.direction == 1 else order.volume
+        if slip_vol:
             # estimate impact on market
-            market_impact_vol = samples[1][anchor + self.p.delay] * self.p.impact
-            filled_vol = slippage_vol if slippage_vol <= market_impact_vol else market_impact_vol
+            tolerate_vol = simulations[1][pos + self.p.delay] * self.p.impact
+            filled_vol = slip_vol if slip_vol <= tolerate_vol else tolerate_vol
 
             # create transaction
-            trade_cost = fee * filled_vol * slippage_price
+            trade_cost = fee_ratio * filled_vol * slip_price
             transaction = Transaction(sid=order.sid, 
-                                      price=slippage_price, 
+                                      price=slip_price, 
                                       size=filled_vol, 
                                       cost=trade_cost)
             return transaction
         return ''
     
-    def trigger_on_dt(self, order, downsamples):
+    async def _on_tick(self, order:Order, downsamples) -> Transaction:
         seconds = elapsed(order.created_dt)
-        anchor = int(np.ceil(seconds/3))
-        txn = self._on_deal(anchor, downsamples, order)
+        pos = int(np.ceil(seconds/3))
+        txn = await self._exec_deal(pos, downsamples, order)
         # set txn created_dt
         txn.created_dt = str2dt(order.created_dt) + datetime.timedelta(seconds=self.p.delay) 
         return txn
 
-    def trigger_on_price(self, order, downsamples):
-        anchors = np.argwhere(downsamples[0] <= order.price) if order.direction == 1 else np.argwhere(downsamples[0] >= order.price)
-        if len(anchors):
-            txn = self._on_deal(anchors[0][0], downsamples, order)
+    async def _on_price(self, order:Order, downsamples) -> Transaction:
+        locs = np.argwhere(downsamples[0] <= order.price) if order.direction == 1 else np.argwhere(downsamples[0] >= order.price)
+        if len(locs):
+            txn = await self._exec_deal(locs[0][0], downsamples, order)
             # set txn created_dt
-            txn.created_dt = loc2dt(anchors[0][0], order.created_dt) + datetime.timedelta(seconds=self.p.delay)  
+            txn.created_dt = loc2dt(locs[0][0], order.created_dt) + datetime.timedelta(seconds=self.p.delay)  
             return txn
         return ''
     
-    def on_trade(self, order, minutes) -> None:
+    async def on_trade(self, event: TradeEvent) -> Transaction:
         """
         # orders to transactions
         Order event push.
         Order event of a specific vt_orderid is also pushed.
         """
+        order = event.order
+        minutes = event.data
         # np.logical_and(txn.match_price>=restricted.channel[0], txn.match_price<=restricted.channel[1]):
         restricted = self.on_restricted(minutes)
         txn = ''
         if not restricted:
-            downsamples = self.analog(minutes)
-            # estimate order volume 
+            simulations = await self.yield_simulation(minutes)
             if order.order_type == 4:
-                txn = self.trigger_on_dt(order, downsamples)
+                txn = await self._on_tick(order, simulations)
             else:
-                txn = self.trigger_on_price(order, downsamples)
+                txn = await self._on_price(order, simulations)
         return txn
