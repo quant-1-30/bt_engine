@@ -63,6 +63,21 @@ def findowner(owned, cls, startlevel=2, skip=None):
 #     def __setattr__(self, __name: str, __value: Any) -> None:
 #         raise ValueError("params is immutable")
         
+class Param(object):
+    """
+        类实例属性赋值调用__setattr__ --- 负责在__dict__注册; 所以重载__setattr__注意, 要不手动注册__dict__
+    """
+    # __slots__ = ("params")
+
+    def __init__(self, params):
+        # self.params = dict(params) if isinstance(params, tuple) else params
+        params = dict(params) if isinstance(params, tuple) else params
+        for k, v in params.items():
+            self.__dict__[k] = v
+
+    def __setattr__(self, __name: str, __value: Any) -> None:
+        raise ValueError("params is immutable")
+    
 
 class MetaBase(type):
 

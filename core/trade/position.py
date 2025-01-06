@@ -29,8 +29,8 @@ from typing import Mapping, Any, List
 from collections import defaultdict, OrderedDict
 from functools import partial
 from utils.wrapper import _deprecated_getitem_method
-from core.ops.model import Transaction, Position
-from core.event import TradeEvent, Event
+from core.ops.model import Transaction
+from core.event import Event
 
 
 class MutableView(object):

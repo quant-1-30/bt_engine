@@ -14,9 +14,10 @@ class Event(BaseModel):
     typ: str
     data: Any
 
-    @field_validator("typ")
-    def restricted(cls):
-        assert cls.typ in ("split", "dividend")
+    @field_validator("typ", mode="before")
+    def restricted(cls, value):
+        assert value in ("split", "dividend")
+        return value
 
 
 class TradeEvent(BaseModel):
@@ -49,9 +50,10 @@ class LoginEvent(BaseModel):
      accout_id: str
      token: str
 
-     @field_validator("user_id")
-     def validate(cls):
-          return True
+     @field_validator("user_id", mode="before")
+     def validate(cls, value):
+          # re match
+          return value
     
     
 class RespEvent(BaseModel):

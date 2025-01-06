@@ -9,9 +9,9 @@ Created on Tue Mar 12 15:37:47 2019
 import pandas as pd
 from toolz import valmap, keymap, merge_with
 from typing import List
-from trade.position import PositionTracker
-from brokers.broker import BtBroker
-from core.event import ReqEvent, Event, PortfolioEvent, TradeEvent, SyncEvent
+from core.trade.position import PositionTracker
+from core.broker.broker import BtBroker
+from core.event import Event, TradeEvent, SyncEvent, PortfolioEvent
 from core.const import DEFAULT_CAPITAL_BASE
 
 
@@ -154,14 +154,14 @@ class Ledger(object):
         self.avaiable += txn.price * txn.size
         return txn
     
-    asyncdef on_event(self, event: Event):
+    async def on_event(self, event: Event):
         """
             dividends and rights
         """
-        data =  await self.position_tracker.process_event(event)
+        data = await self.position_tracker.process_event(event)
         self.avaiable += data
     
-    def on_sync(self, event: SyncEvent):
+    async def on_sync(self, event: SyncEvent):
         """
             sync close price on positions
             Clear out any assets that have expired and positions which volume is zero before starting a new sim day.
@@ -169,7 +169,7 @@ class Ledger(object):
             close_position events for any assets that have reached their
             close_date.
         """
-        self.position_tracker.syncronize(event.data)
+        await self.position_tracker.syncronize(event.data)
         positions = self.position_tracker.get_positions()
         portfolio_value, pnl, usage = self.portfolio.calc_portfolio(event.session_ix, positions)
         portfolio_weight = self.portfolio.current_portfolio_weights(positions)

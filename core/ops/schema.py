@@ -25,16 +25,15 @@ class User(Base):
     __table_args__ = {"extend_existing": True}
     # __table_args__ = (PrimaryKeyConstraint("id", "***"),)
 
-    # 唯一主键
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     # primary = unique + not null
-    user_id: Mapped[str] = mapped_column(UUID(as_uuid=True), unique=True, default=uuid.uuid4)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(30), use_existing_column=True)
+    phone: Mapped[Optional[int]] = mapped_column(BigInteger, unique=True)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=True), unique=True, default=uuid.uuid4)
+    account_id: Mapped[str] = mapped_column(UUID(as_uuid=True), unique=True, default=uuid.uuid4)
     # 计算默认值用server_default --- dababase 非default --- python
     # 默认日期 func.now / func.current_timestamp()
     register_time: Mapped[datetime.datetime] = mapped_column(server_default=func.now(), use_existing_column=True)
-    fullname: Mapped[Optional[str]] = mapped_column(default="")
-    phone: Mapped[Optional[int]] = mapped_column(BigInteger, unique=True)
 
     PrimaryKeyConstraint("user_id", "phone", name="pd_id_phone")
 
@@ -56,8 +55,8 @@ class Address(Base):
     __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    email_address: Mapped[str]
-    user_id: Mapped[int] = mapped_column(ForeignKey("user_account.id", ondelete="CASCADE"), use_existing_column=True)
+    email: Mapped[str]
+    user_id: Mapped[int] = mapped_column(ForeignKey("user_info.user_id", ondelete="CASCADE"), use_existing_column=True)
 
     user: Mapped["User"] = relationship(back_populates="addresses")
 
@@ -72,9 +71,7 @@ class Experiment(Base):
     __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    # foreignKey --- unique
-    user_id: Mapped[str] = mapped_column(ForeignKey("user_account.user_id", ondelete="CASCADE", onupdate="CASCADE"), use_existing_column=True)
-    account_id: Mapped[int] = mapped_column(String(64), nullable=False)
+    account_id: Mapped[int] = mapped_column(ForeignKey("user_info.account_id", ondelete="CASCADE", onupdate="CASCADE"), use_existing_column=True, nullable=False)
     experiment_id: Mapped[int] = mapped_column(String(20), nullable=False, use_existing_column=True)
 
     PrimaryKeyConstraint("user_id", "")
@@ -82,7 +79,7 @@ class Experiment(Base):
     user: Mapped["User"] = relationship(back_populates="experiment")
     order: Mapped[List["Order"]] = relationship(back_populates="experiment")
     transaction: Mapped[List["Transaction"]] = relationship(back_populates="experiment")
-    account: Mapped[List["Account"]] = relationship(back_populates="experiment")
+    portfolio: Mapped[List["Portfolio"]] = relationship(back_populates="experiment")
  
 
 class Order(Base):
@@ -93,7 +90,7 @@ class Order(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     sid: Mapped[str] = mapped_column(String(10), nullable=False, use_existing_column=True)
     created_dt: Mapped[int] = mapped_column(Integer, nullable=False, use_existing_column=True)
-    order_id: Mapped[int] = mapped_column(String(16), primary_key=True, nullable=False, unique=True, use_existing_column=True, )
+    order_id: Mapped[int] = mapped_column(String(64), primary_key=True, nullable=False, unique=True, use_existing_column=True)
     order_type: Mapped[int] = mapped_column(Integer, nullable=False, use_existing_column=True)
     price: Mapped[int] = mapped_column(Integer, nullable=False, use_existing_column=True)
     volume: Mapped[int] = mapped_column(Integer, nullable=False, use_existing_column=True)
@@ -129,9 +126,9 @@ class Transaction(Base):
         back_populates="transactions", cascade="all, delete-orphan")
 
 
-class Account(Base):
+class Portfolio(Base):
 
-    __tablename__ = "account"
+    __tablename__ = "portfolio"
     __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

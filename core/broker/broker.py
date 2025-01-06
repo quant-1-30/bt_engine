@@ -4,11 +4,10 @@ import itertools
 from textwrap import dedent
 from typing import Any, List
 import numpy as np
-from numpy.random import default_rng # type: ignore
-from core.event import Transaction, Commission, Order
 from utils.dt_utilty import elapsed, str2dt, loc2dt
 # from six import with_metaclass
 from meta import ParamBase
+from core.trade.commission import Commission
 from core.event import TradeEvent
 from core.ops.model import Order, Transaction
 
@@ -34,8 +33,7 @@ class BtBroker(ParamBase):
         self.impact_factor = kwargs.pop("impact_factor", self.p.impact_factor) 
         self.slippage_factor = kwargs.pop("slippage_factor", self.p.slippage_factor) 
         self.simulate = kwargs.pop("analog", "BetaPatch") 
-        self.restricted = kwargs.pop("epsilon", self.p.restricted) 
-        self.commission = Commission(self.p.base_cost, self.p.multiply)
+        self.commission = Commission()
 
     def on_restricted(self, minutes):
         """
