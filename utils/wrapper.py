@@ -48,10 +48,10 @@ def _deprecated_getitem_method(name, attrs):
 
 class Deprecated(object):
     """
-    支持装饰类或者方法，在使用类或者方法时警告Deprecated信息
-    wraps --- update_wrapper(包含了update_wrapper) ,如果单独函数修饰不加@wraps(f),需要update_wrapper（wrapper_function,f)
-    类作为修饰器，必须实现__call__
-    ---(__name__, __module__ and __doc__）
+    支持装饰类或者方法, 在使用类或者方法时警告Deprecated信息
+    wraps --- update_wrapper(包含了update_wrapper) ,如果单独函数修饰不加@wraps(f),需要update_wrapper(wrapper_function,f)
+    类作为修饰器, 必须实现__call__
+    ---(__name__, __module__ and __doc__)
     """
 
     def __init__(self, tip_info=''):
@@ -107,7 +107,7 @@ class Deprecated(object):
         return wrapped
 
     def _update_doc(self, func_doc):
-        """更新文档信息，把原来的文档信息进行合并格式化, 即第一行为deprecated_doc(Deprecated: tip_info)，下一行为原始func_doc"""
+        """更新文档信息，把原来的文档信息进行合并格式化, 即第一行为deprecated_doc(Deprecated: tip_info),下一行为原始func_doc"""
         deprecated_doc = "Deprecated"
         if self.tip_info:
             """如果有tip format tip"""
@@ -118,21 +118,21 @@ class Deprecated(object):
         return func_doc
 
 
-def warnings_filter(func):
-    """
-        作用范围：函数装饰器 (模块函数或者类函数)
-        功能：被装饰的函数上的警告不会打印，忽略
-    """
+# def warnings_filter(func):
+#     """
+#         作用范围：函数装饰器 (模块函数或者类函数)
+#         功能：被装饰的函数上的警告不会打印，忽略
+#     """
 
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        warnings.simplefilter('ignore')
-        ret = func(*args, **kwargs)
-        if not ABuEnv.g_ignore_all_warnings:
-            # 如果env中的设置不是忽略所有才恢复
-            warnings.simplefilter('default')
-        return ret
-    return wrapper
+#     @functools.wraps(func)
+#     def wrapper(*args, **kwargs):
+#         warnings.simplefilter('ignore')
+#         ret = func(*args, **kwargs)
+#         if not ABuEnv.g_ignore_all_warnings:
+#             # 如果env中的设置不是忽略所有才恢复
+#             warnings.simplefilter('default')
+#         return ret
+#     return wrapper
 
 
 def singleton(cls):
@@ -152,7 +152,7 @@ def singleton(cls):
 
 def params_to_pandas(func):
     """
-        函数装饰器：不定参数装饰器，定参数转换使用ABuScalerUtil中的装饰器arr_to_pandas(func)
+        函数装饰器: 不定参数装饰器,定参数转换使用ABuScalerUtil中的装饰器arr_to_pandas(func)
         将被装饰函数中的参数中所有可以迭代的序列转换为pd.DataFrame或者pd.Series
     """
     @functools.wraps(func)
@@ -168,7 +168,7 @@ def params_to_pandas(func):
 
 def params_to_numpy(func):
     """
-        函数装饰器：不定参数装饰器，定参数转换使用ABuScalerUtil中的装饰器arr_to_numpy(func)
+        函数装饰器: 不定参数装饰器, 定参数转换使用ABuScalerUtil中的装饰器arr_to_numpy(func)
         将被装饰函数中的参数中所有可以迭代的序列转换为np.array
     """
     @functools.wraps(func)
@@ -230,7 +230,7 @@ def consume_time(func):
 def empty_wrapper(func):
     """
     作用范围：函数装饰器 (模块函数或者类函数)
-    功能：空装饰器，为fix版本问题使用，或者分逻辑功能实现使用
+    功能: 空装饰器, 为fix版本问题使用, 或者分逻辑功能实现使用
     """
 
     @functools.wraps(func)
@@ -244,7 +244,7 @@ def empty_wrapper(func):
 def empty_wrapper_with_params(*p_args, **p_kwargs):
     """
     作用范围：函数装饰器 (模块函数或者类函数)
-    功能：带参数空装饰器，为fix版本问题使用，或者分逻辑功能实现使用
+    功能: 带参数空装饰器, 为fix版本问题使用, 或者分逻辑功能实现使用
     """
 
     def decorate(func):
@@ -259,7 +259,7 @@ def empty_wrapper_with_params(*p_args, **p_kwargs):
 def except_debug(func):
     """
     作用范围：函数装饰器 (模块函数或者类函数)
-    功能：debug，调试使用，装饰在有问题函数上，发生问题打出问题后，再运行一次函数，可以用s跟踪问题了
+    功能: debug, 调试使用, 装饰在有问题函数上, 发生问题打出问题后, 再运行一次函数, 可以用跟踪问题了
     """
 
     @functools.wraps(func)
@@ -277,16 +277,16 @@ def except_debug(func):
 
 class LazyFunc(object):
     """
-    描述器类：作用在类中需要lazy的对象方法上
+    描述器类:作用在类中需要lazy的对象方法上
     优先级：
     __getattribute__ > __getattr__
     #1 调用属性会触发该功能，属性存在则会返回相应的值；
-    #2 如果属性不存在则会抛出异常AttributeError，所以可以自定义异常信息
-    #3 存在__getattr__，若有异常出现则会传递给__getattr__用来接收，执行操作
+    #2 如果属性不存在则会抛出异常AttributeError, 所以可以自定义异常信息
+    #3 存在__getattr__, 若有异常出现则会传递给__getattr__用来接收, 执行操作
     #描述符discription
     __get__ __set__ __delete__
 
-    lazy property  描述符 __get__ __set__（其中一个方法） __delete__ ，将函数或者方法变成实例的属性（__dict__）
+    lazy property  描述符 __get__ __set__(其中一个方法) __delete__ ,将函数或者方法变成实例的属性(__dict__)
 
     class TestDes:
         def __get__(self, instance, owner):
@@ -304,7 +304,7 @@ class LazyFunc(object):
 
     def __init__(self, func):
         """
-        外部使用eg：
+        外部使用eg:
             class BuyCallMixin(object):
                 @LazyFunc
                 def buy_type_str(self):
@@ -315,21 +315,22 @@ class LazyFunc(object):
                     return 1.0
         """
         self.func = func
+        self.attr_name = func.__name__
         self.cache = weakref.WeakKeyDictionary()
 
     def __get__(self, instance, owner):
-        """描述器__get__，使用weakref.WeakKeyDictionary将以实例化的instance加入缓存"""
+        """描述器__get__, 使用weakref.WeakKeyDictionary将以实例化的instance加入缓存"""
         if instance is None:
             return self
         try:
-            return self.cache[instance]
+            return self.cache[self.attr_name]
         except KeyError:
             ret = self.func(instance)
-            self.cache[instance] = ret
+            self.cache[self.attr_name] = ret
             return ret
 
     def __set__(self, instance, value):
-        """描述器__set__，raise AttributeError，即禁止外部set值"""
+        """描述器__set__,raise AttributeError, 即禁止外部set值"""
         raise AttributeError("LazyFunc set value!!!")
 
     def __delete__(self, instance):
@@ -340,12 +341,12 @@ class LazyFunc(object):
 class LazyClsFunc(LazyFunc):
     """
         描述器类：
-        作用在类中需要lazy的类方法上，实际上只是使用__get__(owner, owner)
+        作用在类中需要lazy的类方法上, 实际上只是使用__get__(owner, owner)
         替换原始__get__(self, instance, owner)
     """
 
     def __get__(self, instance, owner):
-        """描述器__get__，使用__get__(owner, owner)替换原始__get__(self, instance, owner)"""
+        """描述器__get__,使用__get__(owner, owner)替换原始__get__(self, instance, owner)"""
         return super(LazyClsFunc, self).__get__(owner, owner)
 
 
@@ -362,7 +363,7 @@ def import_module(name):
 
 # valid_check装饰器工作：
 def valid_check(func):
-    """检测度量的输入是否正常，非正常显示info，正常继续执行被装饰方法"""
+    """检测度量的输入是否正常, 非正常显示info, 正常继续执行被装饰方法"""
 
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs):
@@ -550,25 +551,25 @@ def coerce_numbers_to_my_dtype(f):
     return method
 
 
-# 基于api_method 将方法注册到api
-def api_method(f):
-    # Decorator that adds the decorated class method as a callable
-    # function (wrapped) to zipline.api
-    @wraps(f)
-    def wrapped(*args, **kwargs):
-        # Get the instance and call the method
-        algo_instance = get_algo_instance()
-        if algo_instance is None:
-            raise RuntimeError(
-                'zipline api method %s must be called during a ArkQuant.'
-                % f.__name__
-            )
-        return getattr(algo_instance, f.__name__)(*args, **kwargs)
-    # Add functor to zipline.api
-    # setattr(zipline.api, f.__name__, wrapped)
-    # zipline.api.__all__.append(f.__name__)
-    # f.is_api_method = True
-    return f
+# # 基于api_method 将方法注册到api
+# def api_method(f):
+#     # Decorator that adds the decorated class method as a callable
+#     # function (wrapped) to zipline.api
+#     @wraps(f)
+#     def wrapped(*args, **kwargs):
+#         # Get the instance and call the method
+#         algo_instance = get_algo_instance()
+#         if algo_instance is None:
+#             raise RuntimeError(
+#                 'zipline api method %s must be called during a ArkQuant.'
+#                 % f.__name__
+#             )
+#         return getattr(algo_instance, f.__name__)(*args, **kwargs)
+#     # Add functor to zipline.api
+#     # setattr(zipline.api, f.__name__, wrapped)
+#     # zipline.api.__all__.append(f.__name__)
+#     # f.is_api_method = True
+#     return f
 
 
 class Context:
@@ -618,8 +619,3 @@ def make_context():
         yield {}
     except RuntimeError as err:
         print(f"{err=}")
-
-
-# if __name__ == "__main__":
-#     # print("---------------")
-#     func('作为装饰器运行')

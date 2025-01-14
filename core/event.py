@@ -1,71 +1,69 @@
 #!/usr/bin/env python3
 #-*- coding: utf-8 -*-
 
-from dataclasses import dataclass
-from functools import total_ordering
 from typing import List, Any, Dict, Union, Mapping
-from datetime import datetime
-from pydantic import BaseModel, Field, field_validator
-from core.ops.model import Order, Transaction, Experiment
+from pydantic import BaseModel, field_validator
+from core.trade.meta import OrderMeta
 
 
-class Event(BaseModel):
+class LoginEvent(BaseModel):
+     
+     name: str
+     phone: int
+     email: str
+     auto_register: bool = True
 
-    typ: str
-    data: Any
+     @field_validator("phone", mode="before")
+     def validate_phone(cls, value):
+          # re match
+          return value
+     
 
-    @field_validator("typ", mode="before")
+class TradeEvent(BaseModel):
+
+    orderMeta: OrderMeta
+    payload: dict
+    token: str
+    experiment_id: str
+
+    
+class EquityEvent(BaseModel):
+
+    event_type: str
+    meta: Any
+    token: str
+    experiment_id: str
+
+    @field_validator("event_type", mode="before")
     def restricted(cls, value):
         assert value in ("split", "dividend")
         return value
 
 
-class TradeEvent(BaseModel):
-
-    order: Order
-    data: dict
-
-
 class SyncEvent(BaseModel):
 
     session_ix: int
-    data: Mapping[str, float]
+    meta: Mapping[str, float]
+    token: str
+    experiment_id: str
 
     # class Config:
     #     date_encoders = {
     #         datetime: lambda v: v.strftime('%Y-%m-%d %H:%M:%S')
     #     }
 
+class MetricEvent(BaseModel):
 
-class QueryEvent(BaseModel):
-     
-     start: int
-     end: int
-     experiment_id: str
+    start_dt: int
+    end_dt: int
+    token: str
+    experiment_id: str
 
 
-class LoginEvent(BaseModel):
-     
-     user_id: str
-     accout_id: str
-     token: str
-
-     @field_validator("user_id", mode="before")
-     def validate(cls, value):
-          # re match
-          return value
-    
-    
 class RespEvent(BaseModel):
      
      status: int
      error: str
 
 
-class PortfolioEvent(BaseModel):
-        
-        avaiable: float
-        pnl: Mapping[str, float]
-        usage: float
-        portfolio_value: float
-        portfolio_weight: Mapping[str, float]
+__all__ = ["LoginEvent", "TradeEvent", "EquityEvent", "SyncEvent", "RespEvent"]

@@ -29,8 +29,8 @@ from typing import Mapping, Any, List
 from collections import defaultdict, OrderedDict
 from functools import partial
 from utils.wrapper import _deprecated_getitem_method
-from core.ops.model import Transaction
-from core.event import Event
+from .meta import TransactionMeta   
+from core.event import EquityEvent
 
 
 class MutableView(object):
@@ -82,6 +82,7 @@ class Position(object):
         self.size = size
         self.cost_basis = price
         self.avaiable = 0
+        self.last_sync_date = 0
 
         # stats
         self.upopened = 0
@@ -113,7 +114,7 @@ class Position(object):
         bonus = oldsize * bonus_ratio
         return bonus
     
-    async def on_update(self, txn: Transaction):
+    async def on_update(self, txn: TransactionMeta):
         '''
         Updates the current position and returns the updated size, price and
         units used to open/close a position
@@ -182,7 +183,7 @@ class Position(object):
         self.upopened += opened
         self.upclosed += closed
 
-    def on_settlement(self, close: float):
+    def on_last_sync(self, close: float, dt: int):
         # due to T+1 / end of trading day                 
         self.size += self.upopened
         self.size -= self.upclosed
@@ -190,6 +191,7 @@ class Position(object):
         self.price = close
         self.upopened = 0
         self.upclosed = 0
+        self.last_sync_date = dt
     
     @property
     def closed(self):
@@ -276,15 +278,15 @@ class PositionTracker(object):
         """
         warn("best practice is to use position on_update instead", UserWarning)
 
-    async def process_event(self, event: Event):
-        if event.typ == "split":
-            data = await self._on_split(event.data)
+    async def process_event(self, event: EquityEvent):
+        if event.event_type == "split":
+            data = await self._on_split(event.meta)
         else:
-            data = await self._on_right(event.data)
+            data = await self._on_right(event.meta)
         return data
 
-    async def update(self, transactions: List[Transaction]):
-        for txn in transactions:
+    async def update(self, txns: List[TransactionMeta]):
+        for txn in txns:
             sid = txn.sid
             try:
                 position = self.positions[sid]
@@ -299,7 +301,7 @@ class PositionTracker(object):
                 print('end session closed positions', self.record_closed_position)
                 del self.positions[sid]
 
-    async def syncronize(self, prices: Mapping[str, float]):
+    async def syncronize(self, prices: Mapping[str, float], dt: int):
         """
             a. sync last_sale_price of position (close price)
             b. update position return series
@@ -308,7 +310,7 @@ class PositionTracker(object):
         """
         # update last_sync_date
         for p_obj in self.positions.values():
-            await p_obj.on_settlement(prices[p_obj.sid])
+            await p_obj.on_last_sync(prices[p_obj.sid], dt)
 
     def _cleanup_expired(self, dt: int):
         """

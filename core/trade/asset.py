@@ -6,11 +6,10 @@ Created on Tue Mar 12 15:37:47 2019
 @author: python
 """
 from datetime import datetime
-from meta import BaseObject
-from utils.wrapper import lazy_property
+from utils.wrapper import LazyFunc
 
 
-class Asset(BaseObject):
+class Asset(object):
     """
         前5个交易日,科创板科创板还设置了临时停牌制度, 当盘中股价较开盘价上涨或下跌幅度首次达到30%、60%时，都分别进行一次临时停牌
         单次盘中临时停牌的持续时间为10分钟。每个交易日单涨跌方向只能触发两次临时停牌, 最多可以触发四次共计40分钟临时停牌。
@@ -33,9 +32,8 @@ class Asset(BaseObject):
         self.sid = sid
         self.first_trading = first_trading
         self.delist = delist
-        self.claim_restricted = False
 
-    @lazy_property
+    @LazyFunc
     def tick_size(self):
         """
             科创板 --- 申报最小200股, 递增可以以1股为单位 | 卖出不足200股一次性卖出
@@ -44,7 +42,7 @@ class Asset(BaseObject):
         tick_size = 200 if self.sid.startswith("688") else 100
         return tick_size
 
-    @lazy_property
+    @LazyFunc
     def incr(self):
         """
             multiplier / scatter 
@@ -59,7 +57,7 @@ class Asset(BaseObject):
         """
         return False
 
-    def on_restricted(self, dt):
+    def restricted_limit(self, dt):
         """
             创业板2020年8月24日 20% 涨幅， 上市前五个交易日不设置涨跌幅, 第6个交易日开始
         """
@@ -75,3 +73,6 @@ class Asset(BaseObject):
                 limit = 0.2 if datetime.datetime.strptime(str(dt), "%Y%m%d") >= datetime.date(2020, 8, 24) else 0.05
 
         return limit
+
+    def __repr__(self):
+        return f"Asset(sid={self.sid}, first_trading={self.first_trading}, delist={self.delist})"

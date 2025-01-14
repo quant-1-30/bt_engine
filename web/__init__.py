@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .login import router as login_router
 from .trade import router as trade_router
-from .metrics import router as metrics_router
+from .stats import router as stats_router
 
 # 创建 FastAPI 应用
 app = FastAPI()
@@ -35,6 +35,6 @@ async def log_requests(request: Request, call_next):
 
 
 # 将 APIRouter 实例包含到主应用程序中
-app.include_router(login_router, prefix="/login")
+app.include_router(login_router, prefix="/user")
 app.include_router(trade_router, prefix="/trade")
-app.include_router(metrics_router, prefix="/metrics")
+app.include_router(stats_router, prefix="/stats")

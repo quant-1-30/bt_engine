@@ -2,10 +2,11 @@
 # -*- coding: utf-8 -*-
 
 import pandas as pd
+from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import sessionmaker
-from typing import Union, List, Iterable
+from typing import Union, Dict, Iterable, Any, List
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from meta import with_metaclass, MetaBase
@@ -117,38 +118,62 @@ class AsyncOps(with_metaclass(MetaBase, object)):
             async with session.begin():
                     # stmt = select(cal).execution_options(**self.options)
                     # AsyncSession not support query 
-                    # result = await session.execute(query)
-                    # yield result.scalars().all()
                     # in asynchronous mode, the synchronous yield_per isn't directly applicable. 
                     # Instead, you can use the stream() method, which allows streaming query results asynchronously.
+                    # result = await session.execute(query)
                     stream = await session.stream(query)
                     # stream.scalars() return one field
+                    # yield result.scalars().all()
                     # async for row in stream.scalars():
                     async for row in stream:
                         # Use `scalars()` for ORM-mapped rows
                         yield row
 
-    async def on_insert(self, table_name: str, data: Union[pd.DataFrame, List[dict], dict]):
+    async def on_insert(self, table_name: str, data: Union[pd.DataFrame, Dict[str, Any], Iterable]):
         await self._ensure_initialized()
         async with self.get_db() as session:
             async with session.begin():
+                base_obj = self._orm_map[table_name]
                 if isinstance(data, pd.DataFrame):
                     inserts = list(data.T.to_dict().values())
-                    # Iterable 可迭代对象 __iter__ 使用for / Iterator 迭代器 __iter__ , __next__ yield
                 elif isinstance(data, Iterable):
+                    # Iterable 可迭代对象 __iter__ 使用for / Iterator 迭代器 __iter__ , __next__ yield
                     inserts = data
-                else:
+                elif isinstance(data, Dict):
                     inserts = [data]
-                base_obj = self._orm_map[table_name]
+                else:
+                    raise ValueError(f"Invalid data type: {type(data)}")
                 # 只设置模型中定义的字段
                 inserts = [base_obj(**self.filter_valid_keys(base_obj, insert)) for insert in inserts]
                 session.add_all(inserts)
+            await session.commit()
     
     @staticmethod
     def filter_valid_keys(base_obj, insert):
         valid_keys = [column.name for column in base_obj.__table__.columns]
         # 只设置模型中定义的字段
         return {key: value for key, value in insert.items() if key in valid_keys}
+    
+    async def on_query_obj(self, query: Select):
+        await self._ensure_initialized()
+        async with self.get_db() as session:
+            async with session.begin():
+                result = await session.execute(query)
+                return result.scalars().all()
+    
+    async def on_insert_obj(self, objs: Union[List[Base], Base]):
+        await self._ensure_initialized()
+        async with self.get_db() as session:
+            async with session.begin():
+                print("on_insert_obj", objs)
+                objs = [objs] if not isinstance(objs, Iterable) else objs
+                session.add_all(objs)
+            await session.commit()
+            # if refresh:
+            #    for obj in objs:
+            #        await session.refresh(obj)
+            # print("refresh objs", objs)
+            return objs
 
 
 async_ops = AsyncOps()
